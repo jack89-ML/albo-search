@@ -1,0 +1,12 @@
+{
+  "_comment": "Sample bar councils enabled out of the box. Add more via a local override (see README) — never edit this packaged file.",
+  "lawyers": {
+    "sferabit": [
+      { "name": "MILANO", "id": 1080 },
+      { "name": "FIRENZE", "id": 1047 }
+    ],
+    "iscrivo": [
+      { "name": "SALERNO", "url": "https://iscrivo.dcssrl.it/ISCRIVO-ALBOONLINE/avvsalerno/avvocati" }
+    ]
+  }
+}
