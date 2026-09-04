@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 from dataclasses import dataclass, field
 
 
@@ -56,6 +57,14 @@ def render_json(outcome: SearchOutcome) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+_MULTILINE = re.compile(r"[\r\n]+")
+
+
+def _clean_cell(value: str) -> str:
+    """Flatten newlines/carriage returns so a record occupies one table row."""
+    return _MULTILINE.sub(" · ", value).strip()
+
+
 def render_csv(outcome: SearchOutcome) -> str:
     columns: list[str] = []
     for record in outcome.records:
@@ -66,7 +75,7 @@ def render_csv(outcome: SearchOutcome) -> str:
     writer = csv.writer(buf)
     writer.writerow(["source", "scope", "name", *columns])
     for record in outcome.records:
-        writer.writerow(record.as_row(columns))
+        writer.writerow([_clean_cell(v) for v in record.as_row(columns)])
     return buf.getvalue()
 
 
@@ -86,7 +95,7 @@ def render_table(outcome: SearchOutcome) -> str:
         for key in record.extra:
             if key not in columns:
                 columns.append(key)
-    rows = [r.as_row(columns) for r in outcome.records]
+    rows = [[_clean_cell(v) for v in r.as_row(columns)] for r in outcome.records]
     header = ["source", "scope", "name", *columns]
     widths = [max(len(str(row[i])) for row in [header, *rows]) for i in range(len(header))]
     fmt = "  ".join(f"{{:<{w}}}" for w in widths)

@@ -45,8 +45,18 @@ def xdg_config_path() -> Path | None:
 
 
 def _override_paths(explicit: str | None) -> list[Path]:
+    """Candidate override paths in order of precedence.
+
+    An explicitly requested path that does not exist is a hard error, never
+    a silent fallback to another configuration source.
+    """
+    if explicit:
+        path = Path(explicit).expanduser().resolve()
+        if not path.is_file():
+            raise RegistryError(f"sources file not found: {explicit}")
+        return [path]
     paths: list[Path] = []
-    for raw in (explicit, os.environ.get("ALBO_SEARCH_CONFIG"),
+    for raw in (os.environ.get("ALBO_SEARCH_CONFIG"),
                 os.environ.get("ALBO_SOURCES")):
         if raw:
             paths.append(Path(raw).expanduser().resolve())
@@ -102,21 +112,27 @@ def resolve_sources(override: str | None = None) -> dict:
     return cfg
 
 
-def find_sferabit(cfg: dict, name: str) -> dict:
-    for item in cfg.get("lawyers", {}).get("sferabit", []):
-        if item.get("name", "").upper() == name.upper():
-            return item
-    raise RegistryError(
-        f"unknown Sferabit bar '{name}'. Available: "
-        + ", ".join(x.get("name", "?") for x in cfg.get("lawyers", {}).get("sferabit", []))
-    )
+def _lawyer_names(cfg: dict) -> list[str]:
+    names = [str(item.get("name", "?")).upper()
+             for item in cfg.get("lawyers", {}).get("sferabit", [])]
+    names += [str(item.get("name", "?")).upper()
+              for item in cfg.get("lawyers", {}).get("iscrivo", [])]
+    return names
 
 
-def find_iscrivo(cfg: dict, name: str) -> dict:
-    for item in cfg.get("lawyers", {}).get("iscrivo", []):
-        if item.get("name", "").upper() == name.upper():
-            return item
-    raise RegistryError(
-        f"unknown Iscrivo bar '{name}'. Available: "
-        + ", ".join(x.get("name", "?") for x in cfg.get("lawyers", {}).get("iscrivo", []))
-    )
+def find_lawyer_bar(cfg: dict, name: str) -> tuple[str, dict]:
+    """Resolve a bar-council name to its platform adapter.
+
+    Returns ``("sferabit", item)`` or ``("iscrivo", item)``; raises
+    :class:`RegistryError` when the name is not configured on either
+    platform. Callers dispatch on the returned platform string, so a
+    failure inside one adapter can never be masked as a lookup of the
+    other.
+    """
+    target = name.upper()
+    for platform in ("sferabit", "iscrivo"):
+        for item in cfg.get("lawyers", {}).get(platform, []):
+            if str(item.get("name", "")).upper() == target:
+                return platform, item
+    available = ", ".join(_lawyer_names(cfg)) or "none"
+    raise RegistryError(f"unknown bar '{name}'. Available: {available}")
