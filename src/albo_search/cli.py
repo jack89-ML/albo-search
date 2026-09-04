@@ -87,12 +87,11 @@ def run(argv: list[str] | None = None) -> int:
         if args.command == "avvocati":
             cfg = config.resolve_sources(args.sources)
             scope = args.foro.upper()
-            try:
-                bar = config.find_sferabit(cfg, scope)
+            platform, bar = config.find_lawyer_bar(cfg, scope)
+            if platform == "sferabit":
                 outcome = sferabit.search(http, int(bar["id"]), args.cognome,
                                           limit=args.limit)
-            except RegistryError:
-                bar = config.find_iscrivo(cfg, scope)
+            else:
                 outcome = iscrivo.search(bar["url"], args.cognome,
                                          limit=args.limit, timeout=args.timeout)
         elif args.command == "commercialisti":

@@ -7,6 +7,7 @@ dataSource. Requires the browser extra.
 
 from __future__ import annotations
 
+import sys
 import time
 
 from .browser import new_page, playwright, settle
@@ -15,12 +16,25 @@ from .output import Record, SearchOutcome
 BASE = "https://ricerca.commercialisti.it"
 
 
-def _set_dropdown(page, selector: str, target: str) -> str:
-    """Select an option in a kendoDropDownList whose Description contains target."""
+def _set_dropdown(page, selectors, target: str) -> str:
+    """Select an option in a kendoDropDownList whose Description contains target.
+
+    ``selectors`` may be a single CSS selector or a list of alternatives
+    (different portal builds name the order widget ``#dllTutti`` or
+    ``#ddlTutti``). Returns ``set:<label>`` on success, ``no-widget`` when
+    none of the selectors bound a widget, or ``not-found`` when the option
+    is missing.
+    """
+    if isinstance(selectors, str):
+        selectors = [selectors]
     return page.evaluate(
         """(args) => {
-          const [sel, target] = args;
-          const w = $(sel).data('kendoDropDownList');
+          const [selectors, target] = args;
+          let w = null;
+          for (const sel of selectors) {
+            w = $(sel).data('kendoDropDownList');
+            if (w) break;
+          }
           if (!w) return 'no-widget';
           w.dataSource.read();
           return new Promise((resolve) => {
@@ -38,7 +52,7 @@ def _set_dropdown(page, selector: str, target: str) -> str:
             });
           });
         }""",
-        [selector, target],
+        [selectors, target],
     )
 
 
@@ -71,11 +85,21 @@ def search(cognome: str = "", cap: str = "", order: str = "",
                       timeout=ms)
             settle(page, 3.0)
             if order:
-                _set_dropdown(page, "#dllTutti", order)
-                settle(page, 1.0)
+                result = _set_dropdown(page, ["#dllTutti", "#ddlTutti"], order)
+                if result.startswith("set:"):
+                    settle(page, 0.6)
+                else:
+                    print(f"warning: order dropdown unavailable "
+                          f"({result}); continuing with the default order",
+                          file=sys.stderr)
             if section:
-                _set_dropdown(page, "#ddlSezioni", section)
-                settle(page, 0.8)
+                result = _set_dropdown(page, "#ddlSezioni", section)
+                if not result.startswith("set:"):
+                    print(f"warning: section dropdown unavailable "
+                          f"({result}); continuing without a section filter",
+                          file=sys.stderr)
+                else:
+                    settle(page, 0.5)
             if cap:
                 page.fill('input[name="Cap"]', cap)
             elif cognome:
@@ -86,7 +110,7 @@ def search(cognome: str = "", cap: str = "", order: str = "",
 
             deadline = time.time() + max(float(timeout), 10.0)
             while time.time() < deadline:
-                settle(page, 3.0)
+                settle(page, 0.5)
                 if page.locator("#listIscritti .box-avvisi").count() > 0:
                     break
                 empty = page.locator("#emptyIscritti")

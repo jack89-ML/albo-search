@@ -5,7 +5,7 @@ import json
 import unittest
 
 from albo_search import config, output
-from albo_search.errors import exit_code
+from albo_search.errors import RegistryError, exit_code
 from albo_search.output import Record, SearchOutcome
 
 # Case-related tokens, rot13-encoded so the literal names never appear in
@@ -62,6 +62,21 @@ class RenderTest(unittest.TestCase):
         empty = SearchOutcome(query="Rossi", source="SFERABIT", scope="1080",
                               records=[], total=0, verified_empty=True)
         self.assertIn("verified negative", output.render_table(empty))
+
+    def test_cell_newlines_are_flattened(self):
+        outcome = SearchOutcome(
+            query="Rossi", source="X", scope="Y",
+            records=[Record(source="X", scope="Y", name="A",
+                            extra={"details": "line1\nline2\rline3"})],
+            total=1,
+        )
+        table = output.render_table(outcome)
+        self.assertNotIn("\r", table)
+        self.assertNotIn("\nline1", table)
+        self.assertIn("line1 · line2 · line3", table)
+        csv_text = output.render_csv(outcome)
+        self.assertNotIn("\rline", csv_text)
+        self.assertIn("line1 · line2 · line3", csv_text)
 
 
 class ZeroLeakTest(unittest.TestCase):
@@ -132,6 +147,26 @@ class ZeroLeakTest(unittest.TestCase):
         self.assertIn("MILANO", names)
         self.assertIn("FIRENZE", names)
         self.assertIn("SALERNO", names)
+
+    def test_find_lawyer_bar_resolves_platform(self):
+        cfg = config.default_sources()
+        platform, bar = config.find_lawyer_bar(cfg, "milano")
+        self.assertEqual(platform, "sferabit")
+        self.assertEqual(bar["id"], 1080)
+        platform, bar = config.find_lawyer_bar(cfg, "salerno")
+        self.assertEqual(platform, "iscrivo")
+        self.assertIn("url", bar)
+
+    def test_find_lawyer_bar_unknown_lists_available(self):
+        cfg = config.default_sources()
+        with self.assertRaises(RegistryError) as ctx:
+            config.find_lawyer_bar(cfg, "NONEXISTENT")
+        self.assertIn("MILANO", str(ctx.exception))
+
+    def test_explicit_missing_sources_raises(self):
+        with self.assertRaises(RegistryError) as ctx:
+            config.resolve_sources("/nonexistent/albo-sources.json")
+        self.assertIn("sources file not found", str(ctx.exception))
 
     def test_whole_repo_tree_is_neutral(self):
         """Scans every text file under the project for forbidden tokens.

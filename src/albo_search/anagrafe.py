@@ -30,7 +30,8 @@ _SPACE = re.compile(r"\s+")
 
 _HEADER_ALIASES = {
     "cognome": "cognome", "nome": "nome", "sesso": "sesso",
-    "data di nascita": "data_nascita", "nascita": "data_nascita",
+    "data di nascita": "data_nascita", "data": "data_nascita",
+    "nascita": "data_nascita",
     "luogo di nascita": "luogo", "luogo": "luogo",
     "ente": "ente", "carica": "carica", "incarico": "carica",
 }
@@ -88,9 +89,7 @@ def search(cognome: str, nome: str = "", luogo: str = "",
 
             token = re.compile(rf"\b{re.escape(cognome)}\b", re.I)
             hits: list[dict] = []
-            for row in page.locator("table tr").all():
-                if row.locator("th").count() > 0:
-                    continue  # skip header rows
+            for row in page.locator("table tr:has(td)").all():
                 cells = [_norm(c) for c in row.locator("td").all_inner_texts()]
                 cells = [c for c in cells if c]
                 if not cells:
@@ -100,8 +99,12 @@ def search(cognome: str, nome: str = "", luogo: str = "",
                     continue
                 if luogo and luogo.upper() not in joined.upper():
                     continue
-                link = row.locator('a[href*="InfoAnagrafica"]').first
-                href = link.get_attribute("href") if link.count() else None
+                # Prefer the record link (detail page), else any link on the
+                # same DOM row — same element, so indexes cannot drift.
+                detail = row.locator('a[href*="InfoAnagrafica"]').first
+                if detail.count() == 0:
+                    detail = row.locator("a[href]").first
+                href = detail.get_attribute("href") if detail.count() else None
                 hits.append({"cells": cells, "href": href})
 
             # Zero rows: only a confirmed "no results" state may be reported
@@ -120,7 +123,7 @@ def search(cognome: str, nome: str = "", luogo: str = "",
             # Column layout: try the header row of the results table first,
             # fall back to a positional assumption (cognome, nome, ...).
             mapping: dict[int, str] = {}
-            for header_row in page.locator("table tr").all():
+            for header_row in page.locator("table tr:has(td, th)").all():
                 header_cells = [_norm(c) for c in
                                 header_row.locator("td, th").all_inner_texts()]
                 header_cells = [c for c in header_cells if c]
