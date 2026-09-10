@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,24 +8,43 @@ version = "0.1.0"
 description = "Query Italian public professional registers (lawyers, accountants, administrators) from the CLI."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [{ name = "albo-search contributors" }]
-keywords = ["italy", "albo", "avvocati", "commercialisti", "registries", "cli"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "jack89-ML", email = "jperacchio8@gmail.com" }]
+keywords = [
+  "italy", "albo", "avvocati", "commercialisti", "cassa-forense",
+  "registries", "cli", "compliance", "kyc", "open-data",
+]
 classifiers = [
+  "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Legal Industry",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Internet",
   "Topic :: Utilities",
 ]
 dependencies = []
 
 [project.optional-dependencies]
 browser = ["playwright>=1.40"]
+dev = ["build>=1.2", "twine>=5.1"]
 
 [project.scripts]
 albo-search = "albo_search.cli:main"
 albo = "albo_search.cli:main"
+
+[project.urls]
+Homepage = "https://jack89-ml.github.io/#products"
+Repository = "https://github.com/jack89-ML/albo-search"
+Issues = "https://github.com/jack89-ML/albo-search/issues"
+Changelog = "https://github.com/jack89-ML/albo-search/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

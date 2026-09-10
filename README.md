@@ -1,6 +1,9 @@
 # albo-search
 
 [![test](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml/badge.svg)](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml)
+[![Python](https://img.shields.io/badge/python-3.10–3.14-blue)](https://github.com/jack89-ML/albo-search/blob/main/pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)](tests)
 
 A lightweight CLI tool to query official Italian public professional registers and public administration rosters.
 
@@ -22,6 +25,13 @@ Designed for automated compliance checks, OSINT investigations, and data aggrega
 - **Composable:** Emits clean JSON to `stdout` with diagnostic errors routed exclusively to `stderr` for direct piping into `jq` or external pipelines.
 - **Dead-man Switch:** a global `--timeout` (default 20s) bounds every upstream request; a stalled portal aborts with exit code `2`, never a hang.
 - **Desktop User-Agent:** the stdlib HTTP client never sends the default `Python-urllib` header, which WAFs block on sight; it presents a standard desktop browser UA.
+
+## Requirements
+
+- Python 3.10 – 3.14.
+- No runtime dependencies for the HTTP adapters.
+- Optional: `playwright` (and a Chromium build) for the registries behind
+  JavaScript forms.
 
 ## Installation
 
@@ -110,10 +120,31 @@ cp src/albo_search/data/sources.json ~/.config/albo-search/sources.json
 # ... then edit the copy
 ```
 
+## Development
+
+```bash
+git clone https://github.com/jack89-ML/albo-search
+cd albo-search
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[browser]"
+python -m unittest discover -s tests -v     # 31 tests, all offline
+```
+
+The suite uses stored HTML fixtures, so it never touches the upstream portals.
+Release history lives in [CHANGELOG.md](CHANGELOG.md); the disclosure policy is
+in [SECURITY.md](SECURITY.md).
+
+## Related tools
+
+- [`eml-forensics`](https://github.com/jack89-ML/eml-forensics) — offline
+  e-discovery for `.eml` corpora: MIME parsing, attachment hashes, OCR.
+- [`cleanrepo`](https://github.com/jack89-ML/cleanrepo) — pre-publish OPSEC
+  scanner for secrets, private networks and local paths.
+
 ## Legal & Operational Notice
 
 This tool performs read-only requests against officially public, publicly-indexed institutional endpoints. It stores no cached personal data, bypasses no authentication barriers, and requires no API keys. Users are solely responsible for ensuring their query frequency adheres to upstream server acceptable-use policies.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
