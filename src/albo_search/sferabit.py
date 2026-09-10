@@ -55,12 +55,11 @@ def search(client: HttpClient, bar_id: int, surname: str,
            limit: int = 25) -> SearchOutcome:
     index_url = f"{BASE}/index.php?id={bar_id}"
     client.get(index_url)  # seed cookies
-    response = client.post_raw(
+    html, _charset = client.post_raw_text(
         f"{BASE}/elencoAlboOnline.php?{_query_string(surname)}",
         "",
         referer=index_url,
     )
-    html = response.decode("utf-8", errors="replace")
     total = _find_total(html)
 
     records: list[Record] = []

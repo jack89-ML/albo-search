@@ -5,7 +5,7 @@ import unittest
 
 from albo_search import cassaforense, sferabit
 from albo_search.errors import ParseFailure
-from albo_search.http import HttpClient
+from albo_search.http import HttpClient, decode_body
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
@@ -15,10 +15,15 @@ def _fixture(name: str) -> bytes:
 
 
 class _FakeHttp(HttpClient):
-    """Injected responses; real parsing code, fake transport."""
+    """Injected responses; real parsing code, fake transport.
 
-    def __init__(self, body: bytes):
+    Mirrors the real client API, including the charset-aware ``*_text``
+    helpers the adapters use to decode portal pages.
+    """
+
+    def __init__(self, body: bytes, charset: str | None = "utf-8"):
         self._body = body
+        self._charset = charset
 
     def get(self, url, headers=None, referer=None):
         return self._body
@@ -28,6 +33,15 @@ class _FakeHttp(HttpClient):
 
     def post(self, url, data, headers=None, referer=None):
         return self._body
+
+    def get_text(self, url, headers=None, referer=None):
+        return decode_body(self._body, self._charset), self._charset
+
+    def post_text(self, url, data, headers=None, referer=None):
+        return decode_body(self._body, self._charset), self._charset
+
+    def post_raw_text(self, url, raw, headers=None, referer=None):
+        return decode_body(self._body, self._charset), self._charset
 
 
 class SferabitParserTest(unittest.TestCase):

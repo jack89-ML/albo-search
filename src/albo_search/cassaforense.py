@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from .browser import new_page, playwright, settle
+from .browser import new_page, playwright
 from .errors import ParseFailure
 from .output import Record, SearchOutcome
 
@@ -18,6 +18,24 @@ LANDING = ("https://servizi.cassaforense.it/CFor/ElencoNazionaleAvvocati/"
            "elenconazionaleavvocati_pg.cfm")
 
 _SPACE = re.compile(r"\s+")
+
+# Reactive wait: results table, or the portal's explicit empty message.
+_RESULTS_READY_JS = """() => {
+  const text = document.body ? document.body.innerText : '';
+  if (/non ha prodotto risultati|nessun risultato/i.test(text)) return true;
+  return document.querySelectorAll('table tr').length > 1;
+}"""
+
+
+def wait_for_results(page, timeout_ms: int) -> None:
+    """Block until the portal renders results (or the wait expires)."""
+    wait = getattr(page, "wait_for_function", None)
+    if wait is None:                      # pragma: no cover - defensive
+        return
+    try:
+        wait(_RESULTS_READY_JS, timeout=max(2000, timeout_ms // 3))
+    except Exception:
+        pass
 _EMPTY = re.compile(r"non ha prodotto risultati|nessun risultato", re.I)
 _HEADER = re.compile(
     r"^\s*(cognome\s+e\s+nome|luogo\s+nascita|data\s+nascita|ordine)\s*$", re.I
@@ -85,7 +103,6 @@ def search(surname: str, name: str = "", order: str = "",
         browser, page = new_page(p, timeout_ms=ms)
         try:
             page.goto(LANDING, wait_until="domcontentloaded", timeout=ms)
-            settle(page, 3.0)
             field = page.locator('input[name="cognome"]')
             if field.count() == 0:
                 raise ParseFailure("Cassa Forense search form not found")
@@ -96,7 +113,7 @@ def search(surname: str, name: str = "", order: str = "",
                 page.locator('select[name="Ordine"]').select_option(
                     label=order)
             page.locator("#btncerca, button:has-text('Cerca'), input[type='submit']").first.click()
-            settle(page, 5.0)
+            wait_for_results(page, ms)
             html = page.content()
             records, empty_msg = parse_fragment(html, surname, limit=limit)
             if empty_msg:

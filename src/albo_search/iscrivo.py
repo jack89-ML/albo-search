@@ -37,6 +37,58 @@ def _junk(joined: str, cell_count: int) -> bool:
     return cell_count == 0
 
 
+def parse_rows(rows: list[list[str]], surname: str, scope: str = "",
+               limit: int = 25) -> list[Record]:
+    """Portal rows (one list of cell texts each) to records. Pure, offline.
+
+    Keeping the decision logic out of the browser flow is what makes it
+    testable: the row filters, the name-cell choice ``\u2026`` and the details
+    assembly are the parts that actually break when the portal changes.
+    """
+    token = re.compile(rf"\b{re.escape(surname)}\b", re.I)
+    records: list[Record] = []
+    seen: set[str] = set()
+    for cells in rows:
+        cells = [_norm(cell) for cell in cells if cell and cell.strip()]
+        if not cells:
+            continue
+        joined = " ".join(cells)
+        if _junk(joined, len(cells)) or not token.search(joined):
+            continue
+        if joined in seen:
+            continue
+        seen.add(joined)
+        name_cell = next((c for c in cells if token.search(c)), cells[0])
+        details = " · ".join(c for c in cells if c != name_cell)
+        extra = {"details": details} if details else {}
+        records.append(Record(source="ISCRIVO", scope=scope, name=name_cell,
+                              extra=extra))
+        if len(records) >= limit:
+            break
+    return records
+
+
+# Reactive wait: the results table or the portal's empty-state message,
+# whichever appears first. Replaces a fixed ~8.5s of sleeps per query.
+_RESULTS_READY_JS = r"""() => {
+  const text = document.body ? document.body.innerText : '';
+  if (/Nessun nominativo|Nessun risultato/i.test(text)) return true;
+  if (/Trovat[io]\s+\d+\s+nominativ/i.test(text)) return true;
+  return document.querySelectorAll('table tr').length > 3;
+}"""
+
+
+def wait_for_results(page, timeout_ms: int) -> None:
+    """Block until the portal has rendered results (or the wait expires)."""
+    wait = getattr(page, "wait_for_function", None)
+    if wait is None:                      # pragma: no cover - defensive
+        return
+    try:
+        wait(_RESULTS_READY_JS, timeout=max(2000, timeout_ms // 3))
+    except Exception:
+        pass                              # the parse step reports the outcome
+
+
 def search(url: str, surname: str, limit: int = 25,
            timeout: int = 25) -> SearchOutcome:
     ms = max(5000, timeout * 1000)
@@ -53,9 +105,7 @@ def search(url: str, surname: str, limit: int = 25,
                 )
             field.first.fill(surname)
             page.locator('button:has-text("Cerca")').first.click()
-            settle(page, 4.0)
-            page.wait_for_load_state("networkidle", timeout=ms)
-            settle(page, 2.0)
+            wait_for_results(page, ms)
 
             body_text = page.locator("body").inner_text()
             empty_hit = re.search(
@@ -64,31 +114,12 @@ def search(url: str, surname: str, limit: int = 25,
             total_hit = re.search(r"Trovat[io]\s+(\d+)\s+nominativ", body_text, re.I)
 
             records: list[Record] = []
-            seen: set[str] = set()
-            token = re.compile(rf"\b{re.escape(surname)}\b", re.I)
-
             for _ in range(12):  # pagination safety cap
                 rows = page.locator("table tr:has(td)")
-                for index in range(rows.count()):
-                    row = rows.nth(index)
-                    cells = [_norm(cell) for cell in
-                             row.locator("td").all_inner_texts()]
-                    cells = [c for c in cells if c]
-                    joined = " ".join(cells)
-                    if _junk(joined, len(cells)) or not token.search(joined):
-                        continue
-                    if joined in seen:
-                        continue
-                    seen.add(joined)
-                    name_cell = next((c for c in cells if token.search(c)),
-                                     cells[0] if cells else joined)
-                    details = " · ".join(
-                        c for c in cells if c != name_cell)
-                    extra = {"details": details} if details else {}
-                    records.append(Record(source="ISCRIVO", scope=url,
-                                          name=name_cell, extra=extra))
-                    if len(records) >= limit:
-                        break
+                page_rows = [row.locator("td").all_inner_texts()
+                             for row in (rows.nth(index)
+                                         for index in range(rows.count()))]
+                records = parse_rows(page_rows, surname, scope=url, limit=limit)
                 if len(records) >= limit:
                     break
                 nxt = page.locator(".ui-paginator-next:not(.ui-state-disabled)")
@@ -96,7 +127,7 @@ def search(url: str, surname: str, limit: int = 25,
                     break
                 try:
                     nxt.first.click(timeout=4000)
-                    settle(page, 2.0)
+                    wait_for_results(page, ms)
                 except Exception:
                     break
 

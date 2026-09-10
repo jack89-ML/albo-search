@@ -56,10 +56,17 @@ def _override_paths(explicit: str | None) -> list[Path]:
             raise RegistryError(f"sources file not found: {explicit}")
         return [path]
     paths: list[Path] = []
-    for raw in (os.environ.get("ALBO_SEARCH_CONFIG"),
-                os.environ.get("ALBO_SOURCES")):
-        if raw:
-            paths.append(Path(raw).expanduser().resolve())
+    for variable in ("ALBO_SEARCH_CONFIG", "ALBO_SOURCES"):
+        raw = os.environ.get(variable)
+        if not raw:
+            continue
+        candidate = Path(raw).expanduser().resolve()
+        if not candidate.is_file():
+            # a typo in the environment variable must not silently fall back
+            # to the bundled defaults: the user would query with stale data
+            raise RegistryError(
+                f"{variable} points to a missing file: {candidate}")
+        paths.append(candidate)
     xdg = xdg_config_path()
     if xdg:
         paths.append(xdg)

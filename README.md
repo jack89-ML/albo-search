@@ -3,7 +3,8 @@
 [![test](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml/badge.svg)](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml)
 [![Python](https://img.shields.io/badge/python-3.10–3.14-blue)](https://github.com/jack89-ML/albo-search/blob/main/pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-34%20passing-green)](tests)
+[![tests](https://img.shields.io/badge/tests-71%20passing-green)](tests)
+[![coverage](https://img.shields.io/badge/coverage-66%25-green)](pyproject.toml)
 
 A lightweight CLI tool to query official Italian public professional registers and public administration rosters.
 
@@ -78,6 +79,23 @@ albo-search avvocati --foro SALERNO "Rossi" --timeout 45
 
 `albo` is registered as a shorthand alias for `albo-search`.
 
+## Client behaviour
+
+- **Idempotency aware**: only `GET` requests are retried. A POST to a stateful
+  JSF form is never replayed — a silent second submission is worse than a
+  failed one. Transient `403/429/503` responses are retried with jittered
+  exponential backoff, honouring `Retry-After` when the server sends it.
+- **Charset aware**: responses are decoded with the charset the server
+  declares (`Content-Type`), then a UTF-8 → ISO-8859-1 → Windows-1252 chain.
+  Italian portals still serve Latin-1: decoding those pages as UTF-8 mangles
+  accented surnames.
+- **Reactive waits**: each adapter waits for the results table or the portal's
+  empty-state message, whichever comes first, instead of pausing for a fixed
+  number of seconds per page.
+- **Bounded**: responses larger than 25 MiB are refused, and a URL whose scheme
+  is not `http(s)` is rejected before any connection (a `sources.json` cannot
+  turn the client into a file reader).
+
 ## Exit Codes
 
 The tool returns deterministic status codes suitable for shell scripts:
@@ -127,7 +145,7 @@ git clone https://github.com/jack89-ML/albo-search
 cd albo-search
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[browser]"
-python -m unittest discover -s tests -v     # 34 tests, all offline
+python -m unittest discover -s tests -v     # 71 tests, all offline
 ```
 
 The suite uses stored HTML fixtures, so it never touches the upstream portals.

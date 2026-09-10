@@ -55,6 +55,51 @@ def _extract_field(body: str, label: str) -> str:
     return _norm(match.group(1)) if match else ""
 
 
+def select_hits(rows: list[dict], cognome: str, luogo: str = "") -> list[dict]:
+    """Candidate rows -> hits whose text carries the surname. Pure.
+
+    ``rows`` are ``{"cells": [...], "href": str | None}`` mappings: the DOM
+    walk stays in :func:`search`, while the matching rule stays testable.
+    """
+    token = re.compile(rf"\b{re.escape(cognome)}\b", re.I)
+    hits: list[dict] = []
+    for row in rows:
+        cells = [_norm(cell) for cell in row.get("cells") or []]
+        cells = [cell for cell in cells if cell]
+        if not cells:
+            continue
+        joined = " ".join(cells)
+        if not token.search(joined):
+            continue
+        if luogo and luogo.upper() not in joined.upper():
+            continue
+        hits.append({"cells": cells, "href": row.get("href")})
+    return hits
+
+
+def build_record(cells: list[str], mapping: dict[int, str]) -> tuple[str, dict[str, str]]:
+    """Cells plus the header mapping to ``(name, extras)``. Pure.
+
+    Falls back to a positional layout when the header row is unreadable, and
+    keeps the whole row in ``row`` so no information is lost either way.
+    """
+    extra: dict[str, str] = {}
+    if mapping:
+        for index, field_name in mapping.items():
+            if index < len(cells) and cells[index]:
+                extra[field_name] = cells[index]
+        name = f"{extra.get('cognome', '')} {extra.get('nome', '')}".strip()
+        if not name:
+            name = " ".join(cells)
+    elif len(cells) >= 5:
+        extra = {"cognome": cells[0], "nome": cells[1], "sesso": cells[2],
+                 "data_nascita": cells[3], "luogo": cells[4]}
+        name = f"{cells[0]} {cells[1]}".strip()
+    else:
+        name = cells[0]
+    return name, extra
+
+
 def search(cognome: str, nome: str = "", luogo: str = "",
            detail_limit: int = 5, timeout: float = 20.0) -> SearchOutcome:
     ms = max(5000, int(timeout * 1000))
@@ -87,25 +132,18 @@ def search(cognome: str, nome: str = "", luogo: str = "",
                 settle(page, 1.0)
             body_text = page.locator("body").inner_text().lower()
 
-            token = re.compile(rf"\b{re.escape(cognome)}\b", re.I)
-            hits: list[dict] = []
+            # Prefer the record link (detail page), else any link on the same
+            # DOM row — same element, so indexes cannot drift.
+            dom_rows: list[dict] = []
             for row in page.locator("table tr:has(td)").all():
-                cells = [_norm(c) for c in row.locator("td").all_inner_texts()]
-                cells = [c for c in cells if c]
-                if not cells:
-                    continue
-                joined = " ".join(cells)
-                if not token.search(joined):
-                    continue
-                if luogo and luogo.upper() not in joined.upper():
-                    continue
-                # Prefer the record link (detail page), else any link on the
-                # same DOM row — same element, so indexes cannot drift.
                 detail = row.locator('a[href*="InfoAnagrafica"]').first
                 if detail.count() == 0:
                     detail = row.locator("a[href]").first
-                href = detail.get_attribute("href") if detail.count() else None
-                hits.append({"cells": cells, "href": href})
+                dom_rows.append({
+                    "cells": row.locator("td").all_inner_texts(),
+                    "href": detail.get_attribute("href") if detail.count() else None,
+                })
+            hits = select_hits(dom_rows, cognome, luogo)
 
             # Zero rows: only a confirmed "no results" state may be reported
             # as a verified negative — anything else is a parse failure.
@@ -137,21 +175,7 @@ def search(cognome: str, nome: str = "", luogo: str = "",
             records: list[Record] = []
             for hit in hits[:detail_limit]:
                 cells = hit["cells"]
-                extra: dict[str, str] = {}
-                if mapping:
-                    for index, field in mapping.items():
-                        if index < len(cells) and cells[index]:
-                            extra[field] = cells[index]
-                    name = f"{extra.get('cognome', '')} {extra.get('nome', '')}".strip()
-                    if not name:
-                        name = " ".join(cells)
-                elif len(cells) >= 5:
-                    extra = {"cognome": cells[0], "nome": cells[1],
-                             "sesso": cells[2], "data_nascita": cells[3],
-                             "luogo": cells[4]}
-                    name = f"{cells[0]} {cells[1]}".strip()
-                else:
-                    name = cells[0]
+                name, extra = build_record(cells, mapping)
                 if hit.get("href"):
                     extra["row"] = " ".join(cells)
                     url = hit["href"] if hit["href"].startswith("http") else \

@@ -49,8 +49,10 @@ def render_json(outcome: SearchOutcome) -> str:
         "total": outcome.total if outcome.total is not None else outcome.found,
         "note": outcome.note,
         "verified_empty": outcome.verified_empty,
+        # extras first: a source-specific column named "name" must never
+        # overwrite the canonical record name
         "results": [
-            {"name": r.name, **r.extra}
+            {**r.extra, "name": r.name}
             for r in outcome.records
         ],
     }

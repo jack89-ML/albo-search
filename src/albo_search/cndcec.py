@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 import time
 
-from .browser import new_page, playwright, settle
+from .browser import new_page, playwright
 from .output import Record, SearchOutcome
 
 BASE = "https://ricerca.commercialisti.it"
@@ -75,6 +75,29 @@ def _dump(page):
     )
 
 
+# Reactive wait: the Kendo widgets and the results container, instead of a
+# fixed sleep after every interaction.
+_READY_JS = """() => {
+  const jq = window.jQuery;
+  if (jq) {
+    if (jq('#listIscritti').length) return true;
+    if (jq('.k-grid, .k-listview, .k-dropdown').length) return true;
+  }
+  return document.querySelectorAll('table tr').length > 2;
+}"""
+
+
+def wait_for_widgets(page, timeout_ms: int) -> None:
+    """Block until the Kendo UI widgets have rendered (or the wait expires)."""
+    wait = getattr(page, "wait_for_function", None)
+    if wait is None:                      # pragma: no cover - defensive
+        return
+    try:
+        wait(_READY_JS, timeout=max(2000, timeout_ms // 3))
+    except Exception:
+        pass                              # the extraction step reports the outcome
+
+
 def search(cognome: str = "", cap: str = "", order: str = "",
            section: str = "", timeout: float = 20.0) -> SearchOutcome:
     ms = max(5000, int(timeout * 1000))
@@ -83,11 +106,11 @@ def search(cognome: str = "", cap: str = "", order: str = "",
         try:
             page.goto(f"{BASE}/RicercaIscritti", wait_until="domcontentloaded",
                       timeout=ms)
-            settle(page, 3.0)
+            wait_for_widgets(page, ms)
             if order:
                 result = _set_dropdown(page, ["#dllTutti", "#ddlTutti"], order)
                 if result.startswith("set:"):
-                    settle(page, 0.6)
+                    wait_for_widgets(page, ms)
                 else:
                     print(f"warning: order dropdown unavailable "
                           f"({result}); continuing with the default order",
@@ -99,7 +122,7 @@ def search(cognome: str = "", cap: str = "", order: str = "",
                           f"({result}); continuing without a section filter",
                           file=sys.stderr)
                 else:
-                    settle(page, 0.5)
+                    wait_for_widgets(page, ms)
             if cap:
                 page.fill('input[name="Cap"]', cap)
             elif cognome:
@@ -110,7 +133,7 @@ def search(cognome: str = "", cap: str = "", order: str = "",
 
             deadline = time.time() + max(float(timeout), 10.0)
             while time.time() < deadline:
-                settle(page, 0.5)
+                wait_for_widgets(page, ms)
                 if page.locator("#listIscritti .box-avvisi").count() > 0:
                     break
                 empty = page.locator("#emptyIscritti")

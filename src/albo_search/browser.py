@@ -11,7 +11,6 @@ from __future__ import annotations
 import glob
 import os
 import time
-from typing import Iterator
 
 from .errors import TransportMissing
 
@@ -69,6 +68,11 @@ def new_page(p, locale: str = "it-IT", timeout_ms: int = 30000):
     return browser, page
 
 
-def settle(page, seconds: float = 2.5) -> None:
-    """Brief, conservative pause so JS-rendered content settles."""
+def settle(page, seconds: float = 2.5) -> None:  # noqa: ARG001 - call-site symmetry
+    """Last-resort pause for a fixed wait.
+
+    Prefer the reactive helpers (``wait_for_results``) exposed by each
+    adapter: they return as soon as the portal renders, instead of adding
+    seconds to every query.
+    """
     time.sleep(seconds)
