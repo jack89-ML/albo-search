@@ -12,6 +12,7 @@ name: publish
 #
 # Release procedure:
 #   git tag v0.1.0 && git push origin v0.1.0
+#   then set the repository variable PYPI_PUBLISH=true to enable uploads
 
 on:
   push:
@@ -36,6 +37,12 @@ jobs:
           path: dist/
 
   publish:
+    # Disabled until the PyPI Trusted Publisher exists: set the repository
+    # variable PYPI_PUBLISH to "true" (Settings -> Secrets and variables ->
+    # Actions -> Variables) once the one-time PyPI setup below is done.
+    # Without the variable this job is skipped, so tagging never turns the
+    # workflow red.
+    if: vars.PYPI_PUBLISH == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
