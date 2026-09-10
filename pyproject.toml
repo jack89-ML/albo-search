@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "jack89-ML", email = "jperacchio8@gmail.com" }]
+authors = [{ name = "albo-search contributors" }]
 keywords = [
   "italy", "albo", "avvocati", "commercialisti", "cassa-forense",
   "registries", "cli", "compliance", "kyc", "open-data",

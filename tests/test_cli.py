@@ -51,6 +51,21 @@ class CliTest(unittest.TestCase):
         payload = json.loads(out)
         self.assertEqual(payload["query"], "Rossi")
 
+    def test_help_and_version_exit_zero(self):
+        """`--help`/`--version` are successful invocations, not operational
+        failures: they must not return the documented exit code 2."""
+        for argv in (["--help"], ["--version"], ["-h"]):
+            code, _ = self._run(argv)
+            self.assertEqual(code, 0, f"{argv} returned {code}")
+
+    def test_unknown_subcommand_exits_two(self):
+        code, _ = self._run(["not-a-command"])
+        self.assertEqual(code, 2)
+
+    def test_no_arguments_exits_two(self):
+        code, _ = self._run([])
+        self.assertEqual(code, 2)
+
     def test_missing_positional_exits_two(self):
         code, _ = self._run(["avvocati", "--foro", "milano"])
         self.assertEqual(code, 2)

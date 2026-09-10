@@ -6,9 +6,10 @@ The latest released version on the `main` branch receives security fixes.
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for security problems. Report them privately
-to **jacopo.peracchio@protonmail.com** (PGP key:
-https://jack89-ml.github.io/assets/jacopo_peracchio.pub.asc).
+Please **do not open a public issue** for security problems. Use GitHub's
+private vulnerability reporting: repository **Security** tab → *Report a
+vulnerability*. Reports go to the maintainers privately and stay private until
+a fix is published.
 
 Include, when possible: affected version, a minimal reproduction, and the
 observed impact. You should receive an acknowledgement within 7 days.

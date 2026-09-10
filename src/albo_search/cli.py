@@ -79,8 +79,14 @@ def _render(outcome: SearchOutcome, args) -> str:
 def run(argv: list[str] | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
-    except SystemExit:
-        return 2  # argparse usage/error already printed to stderr
+    except SystemExit as exc:
+        # argparse raises SystemExit(0) for --help/--version and SystemExit(2)
+        # for usage errors (already printed to stderr). Returning 2 for both
+        # made `--help` and `--version` look like operational failures.
+        code = exc.code
+        if isinstance(code, int):
+            return code
+        return 0 if code is None else 2
 
     http = HttpClient(timeout=float(args.timeout))
     try:
