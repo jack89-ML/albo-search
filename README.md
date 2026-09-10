@@ -3,7 +3,7 @@
 [![test](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml/badge.svg)](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml)
 [![Python](https://img.shields.io/badge/python-3.10–3.14-blue)](https://github.com/jack89-ML/albo-search/blob/main/pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-34%20passing-brightgreen)](tests)
+[![tests](https://img.shields.io/badge/tests-34%20passing-green)](tests)
 
 A lightweight CLI tool to query official Italian public professional registers and public administration rosters.
 
