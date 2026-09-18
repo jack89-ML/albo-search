@@ -11,6 +11,7 @@ No third-party dependencies.
 from __future__ import annotations
 
 import http.cookiejar
+import json
 import random
 import re
 import time
@@ -98,8 +99,13 @@ class HttpClient:
             return None      # HTTP-date form: fall back to the backoff curve
 
     def _run(self, method: str, url: str, data: bytes | None,
-             headers: dict[str, str], referer: str | None) -> tuple[bytes, str | None]:
-        retryable = method.upper() == "GET"
+             headers: dict[str, str], referer: str | None,
+             retryable: bool | None = None) -> tuple[bytes, str | None]:
+        # Idempotency is a property of the endpoint, not of the verb: the
+        # default (GET only) is the safe one, and a caller that knows it is
+        # talking to a read-only query API may opt POST back into retries.
+        if retryable is None:
+            retryable = method.upper() == "GET"
         attempts = self._retries if retryable else 1
         last: Exception | None = None
         for attempt in range(attempts):
@@ -170,3 +176,22 @@ class HttpClient:
         hdrs.update(headers or {})
         body, charset = self._run("POST", url, raw.encode(), hdrs, referer)
         return decode_body(body, charset), charset
+
+    def post_json_text(self, url: str, payload: dict,
+                       headers: dict[str, str] | None = None,
+                       referer: str | None = None,
+                       idempotent: bool = False) -> tuple[str, str | None]:
+        """POST a JSON document and decode the response.
+
+        Set ``idempotent`` only for a read-only query API — a search that
+        returns records and changes no server state: only then may a transient
+        failure be replayed. It stays ``False`` for form submissions, where a
+        retry would submit twice.
+        """
+        body = json.dumps(payload).encode()
+        hdrs = {"Content-Type": "application/json",
+                "Accept": "application/json"}
+        hdrs.update(headers or {})
+        raw, charset = self._run("POST", url, body, hdrs, referer,
+                                 retryable=idempotent)
+        return decode_body(raw, charset), charset

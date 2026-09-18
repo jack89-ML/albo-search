@@ -3,8 +3,8 @@
 [![test](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml/badge.svg)](https://github.com/jack89-ML/albo-search/actions/workflows/test.yml)
 [![Python](https://img.shields.io/badge/python-3.10–3.14-blue)](https://github.com/jack89-ML/albo-search/blob/main/pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-71%20passing-green)](tests)
-[![coverage](https://img.shields.io/badge/coverage-66%25-green)](pyproject.toml)
+[![tests](https://img.shields.io/badge/tests-111%20passing-green)](tests)
+[![coverage](https://img.shields.io/badge/coverage-71%25-green)](pyproject.toml)
 
 A lightweight CLI tool to query official Italian public professional registers and public administration rosters.
 
@@ -18,6 +18,7 @@ Designed for automated compliance checks, OSINT investigations, and data aggrega
 | `commercialisti` | Albo Unico Commercialisti | CNDCEC | Browser |
 | `anagrafe` | Amministratori Locali | Ministero dell'Interno | Browser |
 | `identita` | Elenco Nazionale Avvocati | Cassa Forense | Browser |
+| `agronomi` | Albo Unico Agronomi e Forestali | CONAF (SIDAF) | HTTP stdlib |
 
 ## Design Principles
 
@@ -73,6 +74,16 @@ albo-search anagrafe --cognome "Rossi" --nome "Mario" --limit 3
 # Cross-check identity
 albo-search identita --cognome "Rossi" --ordine BOLOGNA
 
+# Agronomists and foresters: national register, with the provincial order
+albo-search agronomi --cognome "Rossi" --ordine FI
+albo-search agronomi --cognome "Rossi" --nome "Mario" --json | jq '.results[0]'
+
+# Exact-match lookup by tax code
+albo-search agronomi --cf "RSSMRA70E02A944X"
+
+# Resolve a register number inside one provincial order
+albo-search agronomi --ordine FI --numero 1234
+
 # Raise the global timeout for slow portals
 albo-search avvocati --foro SALERNO "Rossi" --timeout 45
 ```
@@ -83,7 +94,9 @@ albo-search avvocati --foro SALERNO "Rossi" --timeout 45
 
 - **Idempotency aware**: only `GET` requests are retried. A POST to a stateful
   JSF form is never replayed — a silent second submission is worse than a
-  failed one. Transient `403/429/503` responses are retried with jittered
+  failed one. A read-only JSON query endpoint (the CONAF register) opts back
+  into retries explicitly, because repeating a search changes nothing upstream.
+  Transient `403/429/503` responses are retried with jittered
   exponential backoff, honouring `Retry-After` when the server sends it.
 - **Charset aware**: responses are decoded with the charset the server
   declares (`Content-Type`), then a UTF-8 → ISO-8859-1 → Windows-1252 chain.
@@ -92,6 +105,11 @@ albo-search avvocati --foro SALERNO "Rossi" --timeout 45
 - **Reactive waits**: each adapter waits for the results table or the portal's
   empty-state message, whichever comes first, instead of pausing for a fixed
   number of seconds per page.
+- **Never a silent negative**: an adapter that cannot understand an upstream
+  answer raises (exit code `2`) instead of reporting "not found". A register
+  lookup that answers "no such person" when the page simply changed shape is
+  the one wrong answer that matters, so `1` is reserved for a negative the
+  source itself stated.
 - **Bounded**: responses larger than 25 MiB are refused, and a URL whose scheme
   is not `http(s)` is rejected before any connection (a `sources.json` cannot
   turn the client into a file reader).
@@ -138,6 +156,20 @@ cp src/albo_search/data/sources.json ~/.config/albo-search/sources.json
 # ... then edit the copy
 ```
 
+Registries queried at a fixed endpoint live under `registries`; an override
+replaces individual keys and keeps the bundled ones:
+
+```json
+{
+  "registries": {
+    "conaf": { "endpoint": "https://mirror.example.org/msga/anagrafe/ricercaIscrittiAlbo" }
+  }
+}
+```
+
+An unknown key under `registries.<name>` is a hard error: a typo would
+otherwise leave the query silently pointed at the packaged endpoint.
+
 ## Development
 
 ```bash
@@ -145,7 +177,7 @@ git clone https://github.com/jack89-ML/albo-search
 cd albo-search
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[browser]"
-python -m unittest discover -s tests -v     # 71 tests, all offline
+python -m unittest discover -s tests -v     # 111 tests, all offline
 ```
 
 The suite uses stored HTML fixtures, so it never touches the upstream portals.

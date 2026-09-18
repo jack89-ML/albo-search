@@ -7,6 +7,43 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-19
+
+### Added
+
+- `agronomi` subcommand: agronomists and foresters on the **national register
+  (CONAF Albo Unico, SIDAF)**. A read-only JSON query API reached with the
+  standard library — no browser, no API key — filtered by given name, surname,
+  tax code, provincial order code and register number. Each record reports
+  section, professional title, provincial order, register number, registration
+  date, birthplace, residence, PEC, disciplinary status (`removed` /
+  `suspended` / clean) and subject id.
+- `HttpClient.post_json_text`: JSON request bodies, with `Content-Type` and
+  `Accept` set, decoded through the same charset chain as the HTML helpers.
+- `config.registry_settings`: settings of a fixed-endpoint registry, merged
+  key by key over a new `registries` block in `sources.json`, so a local
+  override can point at a mirror without restating the block.
+- 40 new offline tests (111 total): response mapping, null handling,
+  truncation vs upstream total, mixed-case fallback, refusal paths, and the
+  JSON POST retry contract. Coverage 66% → 71%, `conaf.py` at 99%.
+
+### Changed
+
+- Retry policy is now a property of the endpoint rather than of the verb:
+  `_run` takes an explicit `retryable` flag and `post_json_text` opts in only
+  when the caller declares the endpoint a read-only query API. Form POSTs
+  remain single-shot.
+- The `agronomi` adapter refuses, before any request, a query carrying no
+  identifying filter (name, surname, tax code or register number) and an
+  `--ordine` that is not a two-letter province code. An unrecognised order
+  filter is dropped upstream, which would answer with the whole national
+  register instead of failing.
+- When the register reports matches that no record can be read back from, the
+  search raises (exit `2`) rather than reporting a negative: `1` stays
+  reserved for a "no entry" the register itself stated. A surname typed in
+  mixed case is retried as typed before that negative is returned, because the
+  register stores surnames uppercase.
+
 ## [0.2.0] - 2026-09-10
 
 ### Added
@@ -66,5 +103,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Decoupled bar-council resolution from the query flow; table output hygiene
   (column widths, empty-result rendering).
 
-[Unreleased]: https://github.com/jack89-ML/albo-search/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jack89-ML/albo-search/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jack89-ML/albo-search/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/jack89-ML/albo-search/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jack89-ML/albo-search/releases/tag/v0.1.0

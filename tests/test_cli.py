@@ -5,7 +5,7 @@ import io
 import unittest
 from unittest import mock
 
-from albo_search import cli
+from albo_search import cli, conaf
 from albo_search.output import Record, SearchOutcome
 
 
@@ -87,6 +87,65 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(out, "")          # stdout stays clean
         self.assertIn("error:", err.getvalue())
+
+
+class AgronomiCommandTest(unittest.TestCase):
+    """The CONAF subcommand: argument wiring and its own refusals."""
+
+    def _run(self, argv):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = cli.run(argv)
+        return code, buf.getvalue()
+
+    def test_dispatches_to_the_conaf_adapter_with_the_configured_endpoint(self):
+        with mock.patch.object(cli.conaf, "search",
+                               return_value=_outcome(2)) as mocked:
+            code, out = self._run(["agronomi", "--cognome", "Rossi",
+                                   "--ordine", "FI", "--limit", "7"])
+        self.assertEqual(code, 0)
+        self.assertIn("MATCH 0", out)
+        kwargs = mocked.call_args.kwargs
+        self.assertEqual(kwargs["cognome"], "Rossi")
+        self.assertEqual(kwargs["ordine"], "FI")
+        self.assertEqual(kwargs["limit"], 7)
+        self.assertEqual(kwargs["endpoint"], conaf.DEFAULT_ENDPOINT)
+        self.assertEqual(kwargs["origin"], conaf.DEFAULT_ORIGIN)
+
+    def test_zero_matches_exit_one(self):
+        with mock.patch.object(cli.conaf, "search",
+                               return_value=_outcome(0)):
+            code, _ = self._run(["agronomi", "--cognome", "Rossi"])
+        self.assertEqual(code, 1)
+
+    def test_a_query_without_filters_exits_two_on_stderr(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code, out = self._run(["agronomi"])
+        self.assertEqual(code, 2)
+        self.assertEqual(out, "")
+        self.assertIn("error:", err.getvalue())
+
+    def test_a_bad_order_filter_exits_two(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code, _ = self._run(["agronomi", "--cognome", "Rossi",
+                                 "--ordine", "FIRENZE"])
+        self.assertEqual(code, 2)
+        self.assertIn("province", err.getvalue())
+
+    def test_json_output_is_pure(self):
+        import json
+        with mock.patch.object(cli.conaf, "search",
+                               return_value=_outcome(1)):
+            code, out = self._run(["agronomi", "--cognome", "Rossi", "--json"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["source"], "X")
+
+    def test_help_lists_the_new_command(self):
+        code, out = self._run(["--help"])
+        self.assertEqual(code, 0)
+        self.assertIn("agronomi", out)
 
 
 if __name__ == "__main__":

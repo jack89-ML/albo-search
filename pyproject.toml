@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "albo-search"
-version = "0.2.0"
-description = "Query Italian public professional registers (lawyers, accountants, administrators) from the CLI."
+version = "0.3.0"
+description = "Query Italian public professional registers (lawyers, accountants, administrators, agronomists) from the CLI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "albo-search contributors" }]
 keywords = [
   "italy", "albo", "avvocati", "commercialisti", "cassa-forense",
-  "registries", "cli", "compliance", "kyc", "open-data",
+  "agronomi", "conaf", "registries", "cli", "compliance", "kyc", "open-data",
 ]
 classifiers = [
   "Development Status :: 4 - Beta",

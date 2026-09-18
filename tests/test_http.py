@@ -30,9 +30,11 @@ class FakeOpener:
     def __init__(self, *outcomes):
         self.outcomes = list(outcomes)
         self.calls = 0
+        self.requests = []
 
     def open(self, request, timeout=None):
         self.calls += 1
+        self.requests.append(request)
         outcome = self.outcomes[min(self.calls - 1, len(self.outcomes) - 1)]
         if isinstance(outcome, Exception):
             raise outcome
@@ -122,3 +124,41 @@ class GuardTest(unittest.TestCase):
         client._opener = FakeOpener(Response(b"x" * 100))
         with self.assertRaises(UpstreamBlocked):
             client.get("https://x/y")
+
+
+class JsonPostTest(unittest.TestCase):
+    """The JSON query API of the CONAF register (read-only POST)."""
+
+    def setUp(self):
+        self.client = HttpClient(retries=3, delay=0.01)
+
+    def test_body_and_headers(self):
+        opener = FakeOpener(Response(b'{"a": 1}', "application/json; charset=utf-8"))
+        self.client._opener = opener
+        text, charset = self.client.post_json_text(
+            "https://x/y", {"cognome": "ROSSI"}, headers={"Origin": "https://o"},
+            idempotent=True)
+        self.assertEqual(text, '{"a": 1}')
+        self.assertEqual(charset, "utf-8")
+        request = opener.requests[0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(request.data, b'{"cognome": "ROSSI"}')
+        headers = {k.lower(): v for k, v in request.headers.items()}
+        self.assertEqual(headers["content-type"], "application/json")
+        self.assertEqual(headers["accept"], "application/json")
+        self.assertEqual(headers["origin"], "https://o")
+
+    def test_idempotent_json_post_is_retried(self):
+        opener = FakeOpener(http_error(503), Response(b"{}", "application/json"))
+        self.client._opener = opener
+        with mock.patch.object(http_mod.time, "sleep"):
+            self.client.post_json_text("https://x/y", {}, idempotent=True)
+        self.assertEqual(opener.calls, 2)
+
+    def test_json_post_is_not_retried_unless_declared_idempotent(self):
+        opener = FakeOpener(http_error(503))
+        self.client._opener = opener
+        with mock.patch.object(http_mod.time, "sleep"):
+            with self.assertRaises(UpstreamBlocked):
+                self.client.post_json_text("https://x/y", {})
+        self.assertEqual(opener.calls, 1)

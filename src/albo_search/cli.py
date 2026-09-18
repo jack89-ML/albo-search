@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from . import __version__
-from . import anagrafe, cassaforense, cndcec, config, iscrivo, sferabit
+from . import anagrafe, cassaforense, cndcec, conaf, config, iscrivo, sferabit
 from .errors import RegistryError, exit_code
 from .http import HttpClient
 from .output import SearchOutcome, render_csv, render_json, render_table
@@ -52,6 +52,17 @@ def _parser() -> argparse.ArgumentParser:
     p_id.add_argument("--nome", default="")
     p_id.add_argument("--ordine", default="", help="bar council name")
     _common(p_id)
+
+    p_agr = sub.add_parser("agronomi",
+                           help="agronomists and foresters: CONAF national "
+                                "register (Albo Unico)")
+    p_agr.add_argument("--cognome", default="", help="surname to search")
+    p_agr.add_argument("--nome", default="", help="given name to search")
+    p_agr.add_argument("--cf", default="", help="tax code (exact match)")
+    p_agr.add_argument("--ordine", default="",
+                       help="province code of the register, e.g. FI")
+    p_agr.add_argument("--numero", default="", help="register number")
+    _common(p_agr)
 
     return parser
 
@@ -111,6 +122,13 @@ def run(argv: list[str] | None = None) -> int:
         elif args.command == "identita":
             outcome = cassaforense.search(args.cognome, args.nome, args.ordine,
                                           limit=args.limit, timeout=args.timeout)
+        elif args.command == "agronomi":
+            settings = config.registry_settings(
+                config.resolve_sources(args.sources), "conaf")
+            outcome = conaf.search(http, cognome=args.cognome, nome=args.nome,
+                                   cf=args.cf, ordine=args.ordine,
+                                   numero=args.numero, limit=args.limit,
+                                   **settings)
         else:  # pragma: no cover
             raise RegistryError(f"unknown command {args.command}")
     except KeyboardInterrupt:

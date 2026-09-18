@@ -20,9 +20,21 @@ import json
 import os
 from pathlib import Path
 
+from . import conaf
 from .errors import RegistryError
 
 PACKAGED = Path(__file__).parent / "data" / "sources.json"
+
+# Registries queried at a fixed endpoint (no per-council list to resolve).
+# A user override may replace any of these keys; the bundled value survives
+# for the keys the override leaves out, so a local file can point at a mirror
+# without restating the whole block.
+REGISTRY_DEFAULTS = {
+    "conaf": {
+        "endpoint": conaf.DEFAULT_ENDPOINT,
+        "origin": conaf.DEFAULT_ORIGIN,
+    },
+}
 
 
 def _load(path: Path) -> dict:
@@ -143,3 +155,24 @@ def find_lawyer_bar(cfg: dict, name: str) -> tuple[str, dict]:
                 return platform, item
     available = ", ".join(_lawyer_names(cfg)) or "none"
     raise RegistryError(f"unknown bar '{name}'. Available: {available}")
+
+
+def registry_settings(cfg: dict, name: str) -> dict:
+    """Endpoint settings of a fixed-endpoint registry.
+
+    Bundled defaults merged with the ``registries.<name>`` block of a user
+    override. An unknown key in the override is a hard error: a typo
+    (``endpoit``) would otherwise be ignored silently and the query would keep
+    hitting the packaged endpoint.
+    """
+    defaults = dict(REGISTRY_DEFAULTS.get(name, {}))
+    override = cfg.get("registries", {}).get(name, {})
+    if not isinstance(override, dict):
+        raise RegistryError(f"registries.{name} must be an object")
+    unknown = sorted(set(override) - set(defaults))
+    if unknown:
+        raise RegistryError(
+            f"registries.{name}: unknown key(s) {', '.join(unknown)}; "
+            f"expected {', '.join(sorted(defaults)) or 'no keys'}")
+    defaults.update({key: str(value) for key, value in override.items() if value})
+    return defaults
